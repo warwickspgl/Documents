@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Document Vault — View Documents</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Source+Code+Pro:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy:#1a2540;--gold:#c9a84c;--gold-lt:#e8d08a;--cream:#f5f0e8;--ink:#2c2c2c;
+    --muted:#6b6b6b;--rule:rgba(201,168,76,0.25);--success:#2e7d4f;--error:#8b2020;
+    --card-bg:#ffffff;--radius:4px;--open-accent:#2a5f8f;--open-lt:#e8f0f7;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--cream);color:var(--ink);font-family:'Cormorant Garamond',Georgia,serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem 4rem;}
+  .letterhead{width:100%;max-width:640px;text-align:center;margin-bottom:2.4rem;}
+  .letterhead::before,.letterhead::after{content:'';display:block;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:0.5rem 0;}
+  .letterhead .province{font-size:0.72rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--muted);font-family:'Source Code Pro',monospace;margin-bottom:0.3rem;}
+  .letterhead h1{font-size:2rem;font-weight:600;color:var(--navy);line-height:1.15;}
+  .letterhead .subtitle{font-size:0.85rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--gold);margin-top:0.25rem;font-family:'Source Code Pro',monospace;}
+
+  .tier-toggle{display:flex;width:100%;max-width:640px;margin-bottom:1.2rem;border-radius:var(--radius);overflow:hidden;border:1px solid var(--rule);box-shadow:0 2px 8px rgba(26,37,64,0.06);}
+  .tier-btn{flex:1;padding:0.85rem 0.5rem;font-family:'Source Code Pro',monospace;font-size:0.78rem;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;border:none;transition:background 0.2s,color 0.2s;display:flex;align-items:center;justify-content:center;gap:0.5rem;}
+  .tier-btn.secure{background:var(--navy);color:var(--gold);}
+  .tier-btn.secure.inactive{background:#e8e4dc;color:var(--muted);}
+  .tier-btn.open{background:var(--open-accent);color:#e8f0f7;}
+  .tier-btn.open.inactive{background:#e8e4dc;color:var(--muted);}
+
+  .card{background:var(--card-bg);border:1px solid var(--rule);border-radius:var(--radius);padding:2rem 2.2rem;width:100%;max-width:640px;box-shadow:0 4px 24px rgba(26,37,64,0.07);}
+  .card.secure{border-top:3px solid var(--gold);}
+  .card.open{border-top:3px solid var(--open-accent);}
+  .card-title{font-size:1.1rem;font-weight:600;color:var(--navy);letter-spacing:0.06em;text-transform:uppercase;margin-bottom:1.6rem;padding-bottom:0.7rem;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:0.6rem;}
+
+  .field{margin-bottom:1.3rem;}
+  label{display:block;font-size:0.72rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);font-family:'Source Code Pro',monospace;margin-bottom:0.45rem;}
+  input[type="text"],input[type="date"],input[type="password"],select{width:100%;padding:0.65rem 0.85rem;border:1px solid #d8d0c0;border-radius:var(--radius);font-family:'Source Code Pro',monospace;font-size:0.95rem;color:var(--ink);background:#fdfbf8;transition:border-color 0.2s,box-shadow 0.2s;outline:none;}
+  input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(201,168,76,0.15);}
+  .card.open input:focus{border-color:var(--open-accent);box-shadow:0 0 0 3px rgba(42,95,143,0.15);}
+  #retKey{letter-spacing:0.18em;font-size:1.1rem;text-transform:lowercase;}
+
+  .secure-only,.open-only{display:none;}
+  .secure-only.active,.open-only.active{display:block;}
+
+  .btn-fetch{width:100%;padding:0.85rem;border:none;border-radius:var(--radius);font-family:'Source Code Pro',monospace;font-size:0.88rem;letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;margin-top:0.5rem;transition:background 0.2s,transform 0.1s;display:flex;align-items:center;justify-content:center;gap:0.6rem;}
+  .btn-fetch.secure{background:var(--navy);color:var(--gold);}
+  .btn-fetch.secure:hover:not(:disabled){background:#243058;}
+  .btn-fetch.open{background:var(--open-accent);color:#e8f0f7;}
+  .btn-fetch.open:hover:not(:disabled){background:#1e4a72;}
+  .btn-fetch:disabled{opacity:0.55;cursor:not-allowed;}
+  .spinner{width:16px;height:16px;border-radius:50%;display:none;border:2px solid rgba(201,168,76,0.3);border-top-color:var(--gold);animation:spin 0.7s linear infinite;}
+  .btn-fetch.loading .spinner{display:block;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* Error */
+  .error-panel{display:none;margin-top:1.4rem;border:1px solid #d4a8a8;border-radius:var(--radius);}
+  .error-panel.show{display:block;}
+  .error-header{background:#f5e8e8;color:var(--error);padding:0.7rem 1rem;font-family:'Source Code Pro',monospace;font-size:0.8rem;letter-spacing:0.1em;text-transform:uppercase;display:flex;align-items:center;gap:0.5rem;}
+  .error-body{padding:0.8rem 1rem;font-family:'Source Code Pro',monospace;font-size:0.82rem;color:var(--error);}
+
+  /* ── Document dashboard ── */
+  .dashboard{display:none;margin-top:1.4rem;width:100%;max-width:640px;}
+  .dashboard.show{display:block;}
+  .dashboard-header{font-family:'Source Code Pro',monospace;font-size:0.72rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:0.8rem;}
+  .doc-list{display:flex;flex-direction:column;gap:0.6rem;}
+  .doc-item{background:var(--card-bg);border:1px solid var(--rule);border-radius:var(--radius);padding:1rem 1.2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;box-shadow:0 2px 8px rgba(26,37,64,0.04);transition:border-color 0.2s;}
+  .doc-item:hover{border-color:#b8d0e8;}
+  .doc-item.active{border-color:var(--open-accent);border-left:3px solid var(--open-accent);}
+  .doc-item-info{flex:1;min-width:0;}
+  .doc-item-type{font-size:1.05rem;font-weight:600;color:var(--navy);margin-bottom:0.2rem;}
+  .doc-item-meta{font-family:'Source Code Pro',monospace;font-size:0.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .doc-item-actions{display:flex;gap:0.5rem;flex-shrink:0;}
+  .btn-doc{font-family:'Source Code Pro',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.45rem 0.85rem;border-radius:var(--radius);cursor:pointer;border:none;transition:background 0.2s,transform 0.1s;display:flex;align-items:center;gap:0.35rem;}
+  .btn-doc:active{transform:translateY(1px);}
+  .btn-view{background:var(--open-accent);color:#e8f0f7;}
+  .btn-view:hover{background:#1e4a72;}
+  .btn-view.loading{opacity:0.7;cursor:wait;}
+  .no-docs{background:var(--card-bg);border:1px solid var(--rule);border-radius:var(--radius);padding:2rem;text-align:center;font-family:'Source Code Pro',monospace;font-size:0.85rem;color:var(--muted);}
+
+  /* ── PDF viewer ── */
+  .viewer-panel{display:none;margin-top:1.4rem;width:100%;max-width:640px;}
+  .viewer-panel.show{display:block;}
+  .viewer-card{background:var(--card-bg);border:1px solid var(--rule);border-top:3px solid var(--success);border-radius:var(--radius);padding:1.2rem 1.4rem;box-shadow:0 4px 24px rgba(26,37,64,0.07);}
+  .doc-meta-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem;}
+  .doc-meta-info{font-family:'Source Code Pro',monospace;font-size:0.8rem;color:var(--success);}
+  .doc-actions{display:flex;gap:0.5rem;}
+  .btn-action{font-family:'Source Code Pro',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.45rem 0.9rem;border-radius:var(--radius);cursor:pointer;border:none;transition:background 0.2s,transform 0.1s;display:flex;align-items:center;gap:0.4rem;}
+  .btn-action:active{transform:translateY(1px);}
+  .btn-print{background:var(--navy);color:var(--gold);}
+  .btn-print:hover{background:#243058;}
+  .btn-download{background:#e8f5ee;color:var(--success);border:1px solid #a8d4b8;}
+  .btn-download:hover{background:#d4ecdf;}
+  .btn-back{background:#f0f0ec;color:var(--muted);border:1px solid #d8d0c0;}
+  .btn-back:hover{background:#e8e4dc;color:var(--ink);}
+  .pdf-container{border:1px solid var(--rule);border-radius:var(--radius);overflow:hidden;background:#555;}
+  .pdf-container iframe{width:100%;height:75vh;min-height:500px;border:none;display:block;}
+  .pdf-fallback{display:none;}
+  .pdf-fallback.show{display:block;}
+  .pdf-fallback-inner{padding:2.5rem 1.5rem;text-align:center;background:#fdfbf8;border:1px solid var(--rule);border-radius:var(--radius);}
+  .ready-title{font-size:1.4rem;font-weight:600;color:var(--navy);margin-bottom:0.3rem;}
+  .ready-hint{font-family:'Source Code Pro',monospace;font-size:0.8rem;color:var(--muted);margin-bottom:1.5rem;}
+  .mobile-btns{display:flex;flex-direction:column;gap:0.8rem;max-width:280px;margin:0 auto;}
+  .btn-mobile{width:100%;padding:0.9rem;border-radius:var(--radius);font-family:'Source Code Pro',monospace;font-size:0.88rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:0.6rem;transition:background 0.2s;}
+  .btn-mobile-print{background:var(--navy);color:var(--gold);}
+  .btn-mobile-print:hover{background:#243058;}
+  .btn-mobile-dl{background:#e8f5ee;color:var(--success);border:1px solid #a8d4b8;}
+  .btn-mobile-dl:hover{background:#d4ecdf;}
+
+  .foot-note{margin-top:1.8rem;max-width:640px;width:100%;font-size:0.78rem;color:var(--muted);font-family:'Source Code Pro',monospace;text-align:center;line-height:1.6;}
+</style>
+</head>
+<body>
+
+<div class="letterhead">
+  <div class="province">Provincial Grand Lodge of Warwickshire</div>
+  <h1>Document Vault</h1>
+  <div class="subtitle">Member Document Viewer</div>
+</div>
+
+<div class="tier-toggle">
+  <button class="tier-btn secure" id="toggleSecure" onclick="setTier('secure')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    Secure Document
+  </button>
+  <button class="tier-btn open inactive" id="toggleOpen" onclick="setTier('open')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+    Open Documents
+  </button>
+</div>
+
+<div class="card secure" id="mainCard">
+  <div class="card-title">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" color="#c9a84c" id="cardIcon"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <span id="cardTitleText">Retrieve Secure Meeting Document</span>
+  </div>
+
+  <div class="field">
+    <label for="lodgeCode">Lodge / Chapter / Group Code</label>
+    <input type="text" id="lodgeCode" placeholder="e.g. L1234, C4567, MMM0000, AAR" maxlength="12" autocomplete="off" spellcheck="false">
+  </div>
+
+  <!-- Secure fields -->
+  <div class="secure-only active">
+    <div class="field">
+      <label for="meetingDate">Meeting Date</label>
+      <input type="date" id="meetingDate">
+    </div>
+    <div class="field">
+      <label for="retKey">Retrieval Key</label>
+      <input type="text" id="retKey" placeholder="8-character key from your secretary" maxlength="8" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+
+  <!-- Open fields -->
+  <div class="open-only">
+    <div class="field">
+      <label for="lodgePassword">Lodge Password</label>
+      <input type="password" id="lodgePassword" placeholder="As shared by your secretary" autocomplete="off" spellcheck="false">
+    </div>
+  </div>
+
+  <button class="btn-fetch secure" id="fetchBtn" onclick="doFetch()" disabled>
+    <div class="spinner" id="spinner"></div>
+    <span id="btnLabel">Retrieve Document</span>
+  </button>
+
+  <div class="error-panel" id="errorPanel">
+    <div class="error-header">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Error
+    </div>
+    <div class="error-body" id="errorMsg"></div>
+  </div>
+</div>
+
+<!-- Open document dashboard -->
+<div class="dashboard" id="dashboard">
+  <div class="dashboard-header" id="dashboardHeader">Available documents</div>
+  <div class="doc-list" id="docList"></div>
+</div>
+
+<!-- PDF viewer -->
+<div class="viewer-panel" id="viewerPanel">
+  <div class="viewer-card">
+    <div class="doc-meta-bar">
+      <div class="doc-meta-info">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-2px;margin-right:4px"><polyline points="20 6 9 17 4 12"/></svg>
+        <span id="docName"></span>
+      </div>
+      <div class="doc-actions">
+        <button class="btn-action btn-back" onclick="backToDashboard()" id="backBtn" style="display:none">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          Back
+        </button>
+        <button class="btn-action btn-print" onclick="doPrint()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Print
+        </button>
+        <button class="btn-action btn-download" onclick="doDownload()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download
+        </button>
+      </div>
+    </div>
+    <div class="pdf-container" id="pdfContainer">
+      <iframe id="pdfFrame" title="Document"></iframe>
+    </div>
+    <div class="pdf-fallback" id="pdfFallback">
+      <div class="pdf-fallback-inner">
+        <p class="ready-title">Your document is ready</p>
+        <p class="ready-hint">Use the buttons below to open it</p>
+        <div class="mobile-btns">
+          <button class="btn-mobile btn-mobile-print" onclick="doPrint()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+            Print / Preview
+          </button>
+          <button class="btn-mobile btn-mobile-dl" onclick="doDownload()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="foot-note" id="footNote">
+  This document is private and available by key only.<br>
+  Secure documents are automatically removed 7 days after the meeting date.
+</div>
+
+<script>
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyA0C8IZODx5_qvgKYL3RMq9eqizYMI1cpYwoBkBpVZsxIs8dueMK_8vl7K64iyuR2u_A/exec";
+
+let pdfBlobUrl  = null;
+let currentTier = 'secure';
+let openAuth    = null; // { lodgeCode, key } — kept after login for subsequent fetches
+
+// ── SHA-256 ──────────────────────────────────────────────────
+async function sha256_(msg) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── JSONP ────────────────────────────────────────────────────
+function jsonpGet(params) {
+  return new Promise((resolve, reject) => {
+    const cb  = 'c' + Math.floor(Math.random()*999999);
+    const url = GAS_URL + '?callback=' + cb +
+      Object.entries(params).map(([k,v]) => '&' + k + '=' + encodeURIComponent(String(v))).join('');
+    const script = document.createElement('script');
+    let done = false;
+    const timer = setTimeout(() => {
+      if (!done) { done = true; delete window[cb]; script.remove(); reject(new Error('Request timed out')); }
+    }, 20000);
+    window[cb] = data => {
+      done = true; clearTimeout(timer); delete window[cb]; script.remove();
+      data.ok ? resolve(data) : reject(new Error(data.error || 'Server error'));
+    };
+    script.onerror = () => { if (!done) { done = true; clearTimeout(timer); delete window[cb]; reject(new Error('Network error')); } };
+    script.src = url;
+    document.head.appendChild(script);
+  });
+}
+
+// ── Tier toggle ──────────────────────────────────────────────
+function setTier(tier) {
+  currentTier = tier;
+  const s = tier === 'secure';
+  document.getElementById('toggleSecure').className = 'tier-btn secure' + (s ? '' : ' inactive');
+  document.getElementById('toggleOpen').className   = 'tier-btn open'   + (s ? ' inactive' : '');
+  document.getElementById('mainCard').className     = 'card ' + tier;
+  document.getElementById('fetchBtn').className     = 'btn-fetch ' + tier;
+  document.getElementById('cardTitleText').textContent = s ? 'Retrieve Secure Meeting Document' : 'Lodge Document Library';
+  document.querySelectorAll('.secure-only').forEach(el => el.classList.toggle('active', s));
+  document.querySelectorAll('.open-only').forEach(el => el.classList.toggle('active', !s));
+  document.getElementById('footNote').innerHTML = s
+    ? 'This document is private — the key is specific to this meeting.<br>Secure documents are removed 7 days after the meeting date.'
+    : 'Enter your lodge code and lodge password to see all available documents.';
+  document.getElementById('btnLabel').textContent = s ? 'Retrieve Document' : 'Open Document Library';
+  hideError(); hideDashboard(); hideViewer(); openAuth = null; checkReady();
+}
+
+// ── Ready check ──────────────────────────────────────────────
+['lodgeCode','meetingDate','retKey','lodgePassword'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) { el.addEventListener('input', checkReady); el.addEventListener('change', checkReady); }
+});
+function checkReady() {
+  const lodge = document.getElementById('lodgeCode').value.trim();
+  let ok = !!lodge;
+  if (currentTier === 'secure') {
+    ok = ok && !!document.getElementById('meetingDate').value
+            && document.getElementById('retKey').value.trim().length === 8;
+  } else {
+    ok = ok && !!document.getElementById('lodgePassword').value.trim();
+  }
+  document.getElementById('fetchBtn').disabled = !ok;
+}
+
+// ── Main fetch handler ───────────────────────────────────────
+async function doFetch() {
+  if (currentTier === 'secure') {
+    await fetchSecure();
+  } else {
+    await fetchOpenList();
+  }
+}
+
+// ── Secure: fetch single document ───────────────────────────
+async function fetchSecure() {
+  const lodgeCode   = document.getElementById('lodgeCode').value.trim().toUpperCase();
+  const meetingDate = document.getElementById('meetingDate').value.replace(/-/g,'');
+  const key         = document.getElementById('retKey').value.trim().toLowerCase();
+
+  setLoading(true); hideError(); hideViewer();
+  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
+
+  try {
+    const data = await jsonpGet({ action:'fetchDoc', lodgeCode, meetingDate, key });
+    setLoading(false);
+    renderPdf(data, null);
+  } catch(err) {
+    setLoading(false);
+    showError(err.message);
+  }
+}
+
+// ── Open: fetch document list ────────────────────────────────
+async function fetchOpenList() {
+  const lodgeCode    = document.getElementById('lodgeCode').value.trim().toUpperCase();
+  const lodgePass    = document.getElementById('lodgePassword').value.trim();
+  const key          = (await sha256_(lodgeCode + lodgePass)).substring(0, 8);
+
+  setLoading(true); hideError(); hideDashboard(); hideViewer();
+
+  try {
+    const data = await jsonpGet({ action:'listOpen', lodgeCode, key });
+    setLoading(false);
+
+    // Store auth for subsequent document fetches
+    openAuth = { lodgeCode, key };
+
+    if (!data.docs || data.docs.length === 0) {
+      showError('No documents are currently available for this lodge.');
+      return;
+    }
+
+    showDashboard(lodgeCode, data.docs);
+  } catch(err) {
+    setLoading(false);
+    showError(err.message);
+  }
+}
+
+// ── Open: fetch single document from dashboard ───────────────
+async function fetchOpenDoc(docType, label, btnEl) {
+  if (!openAuth) return;
+  if (pdfBlobUrl) { URL.revokeObjectURL(pdfBlobUrl); pdfBlobUrl = null; }
+
+  // Mark active item
+  document.querySelectorAll('.doc-item').forEach(el => el.classList.remove('active'));
+  if (btnEl) btnEl.closest('.doc-item').classList.add('active');
+
+  // Show loading on button
+  if (btnEl) { btnEl.classList.add('loading'); btnEl.textContent = 'Loading...'; }
+
+  try {
+    const data = await jsonpGet({ action:'fetchOpen', lodgeCode: openAuth.lodgeCode, docType, key: openAuth.key });
+    if (btnEl) { btnEl.classList.remove('loading'); btnEl.textContent = 'View'; }
+    renderPdf(data, label);
+  } catch(err) {
+    if (btnEl) { btnEl.classList.remove('loading'); btnEl.textContent = 'View'; }
+    showError(err.message);
+  }
+}
+
+// ── Dashboard ────────────────────────────────────────────────
+function showDashboard(lodgeCode, docs) {
+  const dash   = document.getElementById('dashboard');
+  const list   = document.getElementById('docList');
+  const header = document.getElementById('dashboardHeader');
+
+  header.textContent = lodgeCode + ' — ' + docs.length + ' document' + (docs.length !== 1 ? 's' : '') + ' available';
+
+  list.innerHTML = docs.map(doc => {
+    const uploaded = doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString('en-GB') : '';
+    const expiry   = doc.expiryDate ? formatDate_(doc.expiryDate) : '';
+    return `<div class="doc-item">
+      <div class="doc-item-info">
+        <div class="doc-item-type">${doc.label}</div>
+        <div class="doc-item-meta">${doc.fileName}${uploaded ? ' &bull; uploaded '+uploaded : ''}${expiry ? ' &bull; available until '+expiry : ''}</div>
+      </div>
+      <div class="doc-item-actions">
+        <button class="btn-doc btn-view" onclick="fetchOpenDoc('${doc.docType}','${doc.label}',this)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          View
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  dash.classList.add('show');
+}
+
+function hideDashboard() { document.getElementById('dashboard').classList.remove('show'); }
+
+function formatDate_(yyyymmdd) {
+  return yyyymmdd.substring(6)+'/'+yyyymmdd.substring(4,6)+'/'+yyyymmdd.substring(0,4);
+}
+
+// ── Render PDF ───────────────────────────────────────────────
+function isAndroid() { return /android/i.test(navigator.userAgent); }
+
+function renderPdf(data, label) {
+  try {
+    const binary = atob(data.data);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    pdfBlobUrl = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
+
+    document.getElementById('docName').textContent = label || data.fileName || 'Document';
+    document.getElementById('backBtn').style.display = currentTier === 'open' ? 'flex' : 'none';
+
+    if (isAndroid()) {
+      document.getElementById('pdfContainer').style.display = 'none';
+      document.getElementById('pdfFallback').classList.add('show');
+    } else {
+      document.getElementById('pdfContainer').style.display = '';
+      document.getElementById('pdfFallback').classList.remove('show');
+      const frame = document.getElementById('pdfFrame');
+      frame.src = pdfBlobUrl;
+      let loaded = false;
+      frame.onload = () => { loaded = true; };
+      setTimeout(() => {
+        if (!loaded) {
+          document.getElementById('pdfContainer').style.display = 'none';
+          document.getElementById('pdfFallback').classList.add('show');
+        }
+      }, 3000);
+    }
+
+    showViewer();
+    setTimeout(() => {
+      document.getElementById('viewerPanel').scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 200);
+  } catch(err) { showError('Could not render document: ' + err.message); }
+}
+
+function backToDashboard() {
+  hideViewer();
+  document.querySelectorAll('.doc-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('dashboard').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+// ── Print / Download ─────────────────────────────────────────
+function doPrint() {
+  if (!pdfBlobUrl) return;
+  const win = window.open(pdfBlobUrl);
+  if (win) win.onload = () => { win.focus(); win.print(); };
+  else doDownload();
+}
+function doDownload() {
+  if (!pdfBlobUrl) return;
+  const fname = document.getElementById('docName').textContent || 'document.pdf';
+  const a = document.createElement('a');
+  a.href = pdfBlobUrl;
+  a.download = fname.endsWith('.pdf') ? fname : fname + '.pdf';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+}
+
+// ── UI helpers ───────────────────────────────────────────────
+function setLoading(on) {
+  const btn = document.getElementById('fetchBtn');
+  btn.disabled = on; btn.classList.toggle('loading', on);
+  document.getElementById('spinner').style.display = on ? 'block' : 'none';
+  if (!on) document.getElementById('btnLabel').textContent =
+    currentTier === 'secure' ? 'Retrieve Document' : 'Open Document Library';
+  else document.getElementById('btnLabel').textContent = 'Loading\u2026';
+}
+function showError(msg) {
+  document.getElementById('errorPanel').classList.add('show');
+  document.getElementById('errorMsg').textContent = msg;
+}
+function hideError()  { document.getElementById('errorPanel').classList.remove('show'); }
+function showViewer() { document.getElementById('viewerPanel').classList.add('show'); }
+function hideViewer() {
+  document.getElementById('viewerPanel').classList.remove('show');
+  document.getElementById('pdfContainer').style.display = '';
+  document.getElementById('pdfFallback').classList.remove('show');
+}
+
+// ── Defaults ─────────────────────────────────────────────────
+document.getElementById('meetingDate').valueAsDate = new Date();
+
+// ── URL parameter pre-fill ───────────────────────────────────
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.has('tier')) setTier(p.get('tier') === 'open' ? 'open' : 'secure');
+  if (p.has('lodge')) {
+    document.getElementById('lodgeCode').value = p.get('lodge').toUpperCase();
+  }
+  checkReady();
+})();
+</script>
+</body>
+</html>
